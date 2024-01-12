@@ -4,6 +4,8 @@ from . import schemas, database, models
 from fastapi import Depends, status, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from icecream import ic
+from .database import SessionLocal
 # from .config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
@@ -27,18 +29,21 @@ def create_access_token(data: dict):
 
 
 def verify_access_token(token: str, credentials_exception):
-
+    ic("verify_access_token")
     try:
 
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         id: str = payload.get("user_id")
+
         if id is None:
             raise credentials_exception
-        token_data = schemas.TokenData(id=id)
+        # token_data = schemas.TokenData(id=id)
     except JWTError:
+        ic("Error occured")
         raise credentials_exception
 
-    return token_data
+    # return token_data
+    return id
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
@@ -49,4 +54,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
     user = db.query(models.User).filter(models.User.id == token.id).first()
 
+    return user
+
+
+# for websocket route
+def get_current_user(token: str):
+    credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                          detail=f"Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
+
+    db = SessionLocal()
+    user_id = verify_access_token(token, credentials_exception)  # Change this line
+    user = db.query(models.User).filter(models.User.id == user_id).first()  # Change this line
+    db.close()
     return user
